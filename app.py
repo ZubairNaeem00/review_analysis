@@ -135,6 +135,14 @@ if model_package:
     
     # Main content area
     col1, col2 = st.columns([2, 1])
+    result_displayed = False
+    prediction = None
+    probabilities = None
+    review_input = ""
+    batch_input = ""
+    reviews = []
+    results = []
+    df = None
     
     with col1:
         st.subheader("🔍 Analyze Sentiment")
@@ -155,28 +163,7 @@ if model_package:
                 if review_input.strip():
                     with st.spinner("🔄 Analyzing sentiment..."):
                         prediction, probabilities = predict_sentiment(review_input, model_package)
-                    
-                    if prediction:
-                        st.markdown("---")
-                        
-                        sentiment_colors = {
-                            'Positive': 'positive',
-                            'Negative': 'negative'
-                        }
-                        color_class = sentiment_colors.get(prediction, 'negative')
-                        
-                        st.markdown(f"""
-                            <div class="sentiment-box {color_class}">
-                                <h3>Predicted Sentiment: <strong>{prediction}</strong></h3>
-                                <p><strong>Review:</strong> {review_input}</p>
-                            </div>
-                        """, unsafe_allow_html=True)
-                        
-                        if probabilities:
-                            st.markdown("**Confidence Scores:**")
-                            for label, prob in probabilities.items():
-                                if label in ['Positive', 'Negative']:
-                                    st.progress(prob, text=f"{label}: {prob:.2%}")
+                    result_displayed = True
                 else:
                     st.warning("⚠️ Please enter a review to analyze.")
         
@@ -199,49 +186,45 @@ if model_package:
                         with st.spinner(f"🔄 Analyzing {len(reviews)} reviews..."):
                             results = []
                             for i, review in enumerate(reviews, 1):
-                                prediction, _ = predict_sentiment(review, model_package)
+                                pred, _ = predict_sentiment(review, model_package)
                                 results.append({
                                     'Review': review,
-                                    'Sentiment': prediction
+                                    'Sentiment': pred
                                 })
                         
-                        st.markdown("---")
-                        st.markdown("**Batch Results:**")
-                        
                         df = pd.DataFrame(results)
-                        st.dataframe(df, use_container_width=True)
-                        
-                        st.markdown("**Summary Statistics:**")
-                        col1, col2 = st.columns(2)
-                        
-                        sentiment_counts = df['Sentiment'].value_counts()
-                        for sentiment, col in zip(['Positive', 'Negative'], [col1, col2]):
-                            count = sentiment_counts.get(sentiment, 0)
-                            percentage = (count / len(df) * 100) if len(df) > 0 else 0
-                            with col:
-                                st.metric(sentiment, f"{count} ({percentage:.1f}%)")
+                        result_displayed = True
                 else:
                     st.warning("⚠️ Please enter at least one review.")
-    
-    with col2:
-        st.subheader("📚 Sample Reviews")
-        st.markdown("""
-            **Positive Example:**
-            > "Amazing quality! Love this product, highly recommend!"
-            
-            **Negative Example:**
-            > "Poor quality and broke within days. Very disappointed."
-        """)
-        
-        st.markdown("---")
-        st.subheader("💡 Tips")
-        st.markdown("""
-            - Longer reviews work better
-            - Write naturally as you would in a real review
-            - The model works on English reviews
-            - Punctuation is automatically cleaned
-        """)
 
+    with col2:
+        if result_displayed:
+            if input_method == "Text Input" and prediction:
+                sentiment_colors = {
+                    'Positive': 'positive',
+                    'Negative': 'negative'
+                }
+                color_class = sentiment_colors.get(prediction, 'negative')
+                st.markdown(f"""
+                    <div class="sentiment-box {color_class}">
+                        <h3>Predicted Sentiment: <strong>{prediction}</strong></h3>
+                        <p><strong>Review:</strong> {review_input}</p>
+                    </div>
+                """, unsafe_allow_html=True)
+                if probabilities:
+                    st.markdown("**Confidence Scores:**")
+                    for label, prob in probabilities.items():
+                        if label in ['Positive', 'Negative']:
+                            st.progress(prob, text=f"{label}: {prob:.2%}")
+            elif input_method == "Batch Predictions" and df is not None:
+                st.markdown("**Batch Results:**")
+                st.dataframe(df, use_container_width=True)
+                st.markdown("**Summary Statistics:**")
+                sentiment_counts = df['Sentiment'].value_counts()
+                for sentiment in ['Positive', 'Negative']:
+                    count = sentiment_counts.get(sentiment, 0)
+                    percentage = (count / len(df) * 100) if len(df) > 0 else 0
+                    st.metric(sentiment, f"{count} ({percentage:.1f}%)")
 else:
     st.error("""
         ❌ **Model not found!**
