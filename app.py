@@ -41,10 +41,6 @@ st.markdown("""
         background-color: #f8d7da;
         border-left: 5px solid #dc3545;
     }
-    .neutral {
-        background-color: #fff3cd;
-        border-left: 5px solid #ffc107;
-    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -61,7 +57,7 @@ st.sidebar.markdown("""
     **Model Details:**
     - **Features:** Combined Word (20K, 1-2 grams) + Character (30K, 3-5 grams) TF-IDF
     - **Algorithms:** 11 trained (Logistic Regression, SVM, Naive Bayes, Random Forest, etc.)
-    - **Task:** 3-class sentiment classification (Negative, Neutral, Positive)
+    - **Task:** 2-class sentiment classification (Negative, Positive)
     - **Input:** Product review text
     - **Output:** Sentiment label with confidence
     """)
@@ -106,12 +102,15 @@ def predict_sentiment(review_text, model_package):
         # Combine features
         text_combined = hstack([text_word, text_char])
         
+        # Convert sparse matrix to dense for model compatibility (especially MLP)
+        text_combined_dense = text_combined.toarray()
+        
         # Make prediction
-        prediction = model_package['model'].predict(text_combined)[0]
+        prediction = model_package['model'].predict(text_combined_dense)[0]
         
         # Get prediction probabilities if available
         try:
-            probabilities = model_package['model'].predict_proba(text_combined)[0]
+            probabilities = model_package['model'].predict_proba(text_combined_dense)[0]
             prob_dict = {label: prob for label, prob in zip(model_package['sentiment_labels'], probabilities)}
         except AttributeError:
             prob_dict = None
@@ -162,11 +161,9 @@ if model_package:
                         
                         sentiment_colors = {
                             'Positive': 'positive',
-                            'Negative': 'negative',
-                            'Neutral': 'neutral'
+                            'Negative': 'negative'
                         }
-                        
-                        color_class = sentiment_colors.get(prediction, 'neutral')
+                        color_class = sentiment_colors.get(prediction, 'negative')
                         
                         st.markdown(f"""
                             <div class="sentiment-box {color_class}">
@@ -178,7 +175,8 @@ if model_package:
                         if probabilities:
                             st.markdown("**Confidence Scores:**")
                             for label, prob in probabilities.items():
-                                st.progress(prob, text=f"{label}: {prob:.2%}")
+                                if label in ['Positive', 'Negative']:
+                                    st.progress(prob, text=f"{label}: {prob:.2%}")
                 else:
                     st.warning("⚠️ Please enter a review to analyze.")
         
@@ -214,22 +212,14 @@ if model_package:
                         st.dataframe(df, use_container_width=True)
                         
                         st.markdown("**Summary Statistics:**")
-                        col1, col2, col3 = st.columns(3)
+                        col1, col2 = st.columns(2)
                         
                         sentiment_counts = df['Sentiment'].value_counts()
-                        for sentiment in ['Positive', 'Negative', 'Neutral']:
+                        for sentiment, col in zip(['Positive', 'Negative'], [col1, col2]):
                             count = sentiment_counts.get(sentiment, 0)
                             percentage = (count / len(df) * 100) if len(df) > 0 else 0
-                            
-                            if sentiment == 'Positive':
-                                with col1:
-                                    st.metric("Positive", f"{count} ({percentage:.1f}%)")
-                            elif sentiment == 'Negative':
-                                with col2:
-                                    st.metric("Negative", f"{count} ({percentage:.1f}%)")
-                            else:
-                                with col3:
-                                    st.metric("Neutral", f"{count} ({percentage:.1f}%)")
+                            with col:
+                                st.metric(sentiment, f"{count} ({percentage:.1f}%)")
                 else:
                     st.warning("⚠️ Please enter at least one review.")
     
@@ -238,9 +228,6 @@ if model_package:
         st.markdown("""
             **Positive Example:**
             > "Amazing quality! Love this product, highly recommend!"
-            
-            **Neutral Example:**
-            > "It's a decent product, meets basic requirements."
             
             **Negative Example:**
             > "Poor quality and broke within days. Very disappointed."
